@@ -1,0 +1,13 @@
+torch
+torchvision
+editdistance
+numpy
+Pillow
+scikit-image
+scikit-learn
+scipy
+tqdm
+json
+os
+argparse
+Pathlib
