@@ -1,6 +1,11 @@
 
 # Multilingual Arabic-English SVTR OCR Recognizer
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
+[![Kaggle Notebook](https://img.shields.io/badge/kaggle-notebook-blue)](https://www.kaggle.com/code/ahmedkamal75/multilingual-arabic-english-svtr-ocr-recongnizer)
+[![Model (Kaggle)](https://img.shields.io/badge/model-kaggle-orange)](https://www.kaggle.com/models/ahmedkamal75/svtr_deformable_large_epoch_58)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+
 This project explores **Scene Text Recognition (STR)** using the **SVTR (Scene Visual Transformer)** architecture with **deformable attention** for multilingual OCR in **Arabic and English**.  
 
 The work was conducted on **Kaggle GPUs (Tesla P100-PCIE-16GB)** under resource limits of **30 hours per week** and **12 hours per session**. Training was done in multiple experiments to evaluate dataset complexity, model scaling, and augmentation strategies.
