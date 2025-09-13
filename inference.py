@@ -617,6 +617,7 @@ if __name__ == "__main__":
 
 # python inference.py   --model_path models/Defo_SVTR_Large_2.3.pth   --image_path test_dataset_ocr/ar/   --output_dir results/ar --visualize --analyze --labels_file test_dataset_ocr/ar/ar_ground_truth.txt   --use_beam --beam_size 20 --batch_size 4 --keep_aspect
 
+
 # python inference.py \
 #   --model_path models/Defo_SVTR_Large_1.0.pth \
 #   --image_path test_dataset_ocr/ar/ \

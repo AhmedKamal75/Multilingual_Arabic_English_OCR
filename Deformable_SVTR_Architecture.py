@@ -48,6 +48,7 @@ def window_partition_nchw(x, window_size):
     # Return windows and information needed for reverse operation
     return windows, (Hp, Wp, pad_h, pad_w, n_h, n_w)
 
+
 def window_reverse_nchw(windows, window_size, Hp, Wp, pad_h, pad_w, n_h, n_w, B):
     """
     Reverse windows back to NCHW tensor.
@@ -62,14 +63,14 @@ def window_reverse_nchw(windows, window_size, Hp, Wp, pad_h, pad_w, n_h, n_w, B)
       x: (B, C, H, W) restored (unpadded) tensor
     """
     wh, ww = window_size
-    C = windows.shape[-1] # Get the number of channels from the windows tensor
+    C = windows.shape[-1]  # Get the number of channels from the windows tensor
     # Reshape the windows back to their spatial arrangement within each image
     x = windows.view(B, n_h, n_w, wh, ww, C)
     # Permute the dimensions back to the original NCHW format (B, C, H, W)
     # This reverses the permutation done in window_partition_nchw
     x = x.permute(0, 5, 1, 3, 2, 4).contiguous()  # (B, C, n_h, wh, n_w, ww)
     # Reshape to combine the window dimensions with the number of windows dimensions
-    x = x.view(B, C, Hp, Wp) # (B, C, Hp, Wp) - padded tensor
+    x = x.view(B, C, Hp, Wp)  # (B, C, Hp, Wp) - padded tensor
 
     # Remove padding if it was applied
     if pad_h > 0:
@@ -84,8 +85,10 @@ def window_reverse_nchw(windows, window_size, Hp, Wp, pad_h, pad_w, n_h, n_w, B)
     x = x[:, :, :h, :w].contiguous()
     return x
 
+
 class PatchEmbedSVTR(nn.Module):
     """Overlapping Patch Embedding (NCHW) similar to SVTR paper."""
+
     def __init__(self, img_size=(64, 256), in_chans=3, embed_dim=64):
         super().__init__()
         H, W = img_size
@@ -94,12 +97,12 @@ class PatchEmbedSVTR(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_chans, embed_dim // 2, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(embed_dim // 2),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(embed_dim // 2, embed_dim, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(embed_dim),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
         # store patches resolution
         self.patches_resolution = (H // 4, W // 4)
@@ -109,7 +112,10 @@ class PatchEmbedSVTR(nn.Module):
     def forward(self, x):
         # x: (B, C, H, W)
         B, C, H, W = x.shape
-        assert (H, W) == self.img_size, f"Input size {(H,W)} != expected {self.img_size}"
+        assert (
+            H,
+            W,
+        ) == self.img_size, f"Input size {(H,W)} != expected {self.img_size}"
         x = self.conv1(x)
         x = self.conv2(x)
         # now x: (B, embed_dim, H/4, W/4)
@@ -117,6 +123,7 @@ class PatchEmbedSVTR(nn.Module):
         x = x.flatten(2).transpose(1, 2)  # (B, h*w, D)
         x = self.norm(x)
         return x  # (B, N, D)
+
 
 class MLP(nn.Module):
     def __init__(self, in_dim, ratio=2.0, drop=0.0):
@@ -133,27 +140,38 @@ class MLP(nn.Module):
         x = self.fc2(x)
         return self.drop(x)
 
+
 class GlobalMixing(nn.Module):
     """Global mixing (Transformer-style) block."""
+
     def __init__(self, dim, num_heads, mlp_ratio=2.0, drop=0.0):
         super().__init__()
-        self.norm1 = nn.LayerNorm(dim) # Layer normalization before attention
-        self.attn = nn.MultiheadAttention(dim, num_heads, batch_first=True, dropout=drop) # Multi-head self-attention
-        self.norm2 = nn.LayerNorm(dim) # Layer normalization after attention and before MLP
-        self.mlp = MLP(dim, ratio=mlp_ratio, drop=drop) # MLP block (Feed-forward network)
+        self.norm1 = nn.LayerNorm(dim)  # Layer normalization before attention
+        self.attn = nn.MultiheadAttention(
+            dim, num_heads, batch_first=True, dropout=drop
+        )  # Multi-head self-attention
+        self.norm2 = nn.LayerNorm(
+            dim
+        )  # Layer normalization after attention and before MLP
+        self.mlp = MLP(
+            dim, ratio=mlp_ratio, drop=drop
+        )  # MLP block (Feed-forward network)
 
     def forward(self, x):
         # x: (B, N, D) where B is batch size, N is sequence length, D is dimension
-        res = x # Residual connection
-        x = self.norm1(x) # Apply LayerNorm Improved Training Stability
+        res = x  # Residual connection
+        x = self.norm1(x)  # Apply LayerNorm Improved Training Stability
         # Apply Multi-head self-attention. Query, Key, and Value are all the same (self-attention).
         attn_out, _ = self.attn(x, x, x)
-        x = res + attn_out # Add attention output to the residual connection
+        x = res + attn_out  # Add attention output to the residual connection
 
-        res = x # Second residual connection
-        x = self.norm2(x) # Apply LayerNorm
-        x = res + self.mlp(x) # Add MLP output to the residual connection (including dropout within MLP)
-        return x # Output tensor with the same shape as input (B, N, D)
+        res = x  # Second residual connection
+        x = self.norm2(x)  # Apply LayerNorm
+        x = res + self.mlp(
+            x
+        )  # Add MLP output to the residual connection (including dropout within MLP)
+        return x  # Output tensor with the same shape as input (B, N, D)
+
 
 class NOLMWA(nn.Module):
     """
@@ -163,22 +181,31 @@ class NOLMWA(nn.Module):
       - reverse
     Inputs to forward(): x is (B, N, D) with h,w passed separately.
     """
-    def __init__(self, dim, num_heads, mlp_ratio=2.0, window_size=(7,11), drop=0.0):
-        super().__init__()
-        self.dim = dim # Input dimension
-        self.num_heads = num_heads # Number of attention heads
-        self.wh, self.ww = window_size # Window height and width
-        self.norm1 = nn.LayerNorm(dim) # Layer normalization before attention
-        self.attn = nn.MultiheadAttention(dim, num_heads, batch_first=True, dropout=drop) # Multi-head self-attention
-        self.norm2 = nn.LayerNorm(dim) # Layer normalization after attention and before MLP
-        self.mlp = MLP(dim, ratio=mlp_ratio, drop=drop) # MLP block (Feed-forward network)
 
-    def forward(self, x, h, w, shift=(0,0)):
+    def __init__(self, dim, num_heads, mlp_ratio=2.0, window_size=(7, 11), drop=0.0):
+        super().__init__()
+        self.dim = dim  # Input dimension
+        self.num_heads = num_heads  # Number of attention heads
+        self.wh, self.ww = window_size  # Window height and width
+        self.norm1 = nn.LayerNorm(dim)  # Layer normalization before attention
+        self.attn = nn.MultiheadAttention(
+            dim, num_heads, batch_first=True, dropout=drop
+        )  # Multi-head self-attention
+        self.norm2 = nn.LayerNorm(
+            dim
+        )  # Layer normalization after attention and before MLP
+        self.mlp = MLP(
+            dim, ratio=mlp_ratio, drop=drop
+        )  # MLP block (Feed-forward network)
+
+    def forward(self, x, h, w, shift=(0, 0)):
         # x: (B, N, D) where B is batch size, N is sequence length (h*w), D is dimension
         B, N, D = x.shape
-        assert N == h * w, "N must equal h*w" # Assert that sequence length matches spatial dimensions
+        assert (
+            N == h * w
+        ), "N must equal h*w"  # Assert that sequence length matches spatial dimensions
 
-        res = x # Residual connection
+        res = x  # Residual connection
 
         # Pre-normalization
         x = self.norm1(x)
@@ -187,14 +214,18 @@ class NOLMWA(nn.Module):
         x2 = x.transpose(1, 2).reshape(B, D, h, w)
 
         # Partition into windows - windows shape (B*n_h*n_w, wh*ww, C)
-        windows, (Hp, Wp, pad_h, pad_w, n_h, n_w) = window_partition_nchw(x2, (self.wh, self.ww))
+        windows, (Hp, Wp, pad_h, pad_w, n_h, n_w) = window_partition_nchw(
+            x2, (self.wh, self.ww)
+        )
 
         # Apply Multi-head self-attention on windows
         # windows shape is (num_windows_total, wh*ww, C) but C==D
         attn_out, _ = self.attn(windows, windows, windows)
 
         # Reverse window partitioning - reconstruct to (B, C, h, w)
-        x2 = window_reverse_nchw(attn_out, (self.wh, self.ww), Hp, Wp, pad_h, pad_w, n_h, n_w, B)
+        x2 = window_reverse_nchw(
+            attn_out, (self.wh, self.ww), Hp, Wp, pad_h, pad_w, n_h, n_w, B
+        )
 
         # Reshape back to (B, N, D)
         x = x2.view(B, D, h * w).transpose(1, 2).contiguous()
@@ -211,7 +242,8 @@ class NOLMWA(nn.Module):
         # Apply MLP and add residual connection
         x = res + self.mlp(x)
 
-        return x # Output tensor with the same shape as input (B, N, D)
+        return x  # Output tensor with the same shape as input (B, N, D)
+
 
 class SWLMWA(nn.Module):
     """
@@ -219,15 +251,23 @@ class SWLMWA(nn.Module):
     Implements manual multi-head attention so we can apply a (num_windows, ws, ws) mask.
     """
 
-    def __init__(self, dim, num_heads, mlp_ratio=2.0, window_size=(7,11), drop=0.0, shift_size=(0,0)):
+    def __init__(
+        self,
+        dim,
+        num_heads,
+        mlp_ratio=2.0,
+        window_size=(7, 11),
+        drop=0.0,
+        shift_size=(0, 0),
+    ):
         super().__init__()
         assert dim % num_heads == 0, "dim must be divisible by num_heads"
         self.dim = dim
         self.num_heads = num_heads
         self.wh, self.ww = window_size
         self.head_dim = dim // num_heads
-        self.scale = self.head_dim ** -0.5
-        self.shift_size = shift_size if shift_size is not None else (0,0)
+        self.scale = self.head_dim**-0.5
+        self.shift_size = shift_size if shift_size is not None else (0, 0)
 
         # Layer norm before attention and QKV projection
         self.norm1 = nn.LayerNorm(dim)
@@ -246,7 +286,6 @@ class SWLMWA(nn.Module):
         # We can register an empty buffer or None here, or simply generate it directly in forward.
         # We will generate it directly in forward.
 
-
     def forward(self, x, h, w):
         """
         x: (B, N, D) with N == h*w
@@ -255,7 +294,7 @@ class SWLMWA(nn.Module):
         B, N, D = x.shape
         assert N == h * w, f"N({N}) must equal h({h})*w({w})"
         device = x.device
-        res = x # Residual connection
+        res = x  # Residual connection
 
         # pre-norm
         x = self.norm1(x)
@@ -273,12 +312,14 @@ class SWLMWA(nn.Module):
 
         # partition into windows
         # Output windows shape: (B * n_h * n_w, ws, C) where ws = wh*ww
-        windows, (Hp, Wp, pad_h, pad_w, n_h, n_w) = window_partition_nchw(x2, (self.wh, self.ww))
+        windows, (Hp, Wp, pad_h, pad_w, n_h, n_w) = window_partition_nchw(
+            x2, (self.wh, self.ww)
+        )
         # windows: (num_windows_total, ws, C) where num_windows_total = B * n_h * n_w
 
-        num_windows_total = windows.shape[0] # Total number of windows across the batch
+        num_windows_total = windows.shape[0]  # Total number of windows across the batch
         ws = windows.shape[1]  # seq length inside a window
-        num_windows_per_image = n_h * n_w # Number of windows per image
+        num_windows_per_image = n_h * n_w  # Number of windows per image
 
         # Generate attention mask dynamically based on current input dimensions
         # Create a mask grid that labels each (Hp x Wp) token with its window index
@@ -286,7 +327,7 @@ class SWLMWA(nn.Module):
         cnt = 0
         for i in range(0, Hp, self.wh):
             for j in range(0, Wp, self.ww):
-                img_mask[:, :, i:i + self.wh, j:j + self.ww] = cnt
+                img_mask[:, :, i : i + self.wh, j : j + self.ww] = cnt
                 cnt += 1
 
         # Partition that mask the same way we partition x2 (but on a single image)
@@ -295,19 +336,19 @@ class SWLMWA(nn.Module):
 
         # Reshape mask_windows to (num_windows_per_image, ws)
         # Remove the singleton channel dimension from mask_windows
-        mask_windows = mask_windows.squeeze(-1) # Shape becomes (num_windows_per_image, ws)
-
+        mask_windows = mask_windows.squeeze(
+            -1
+        )  # Shape becomes (num_windows_per_image, ws)
 
         # Create per-window boolean mask where True indicates "forbid attention"
         # (n_h * n_w, ws, ws) of booleans
-        attn_mask = (mask_windows.unsqueeze(1) != mask_windows.unsqueeze(2))
+        attn_mask = mask_windows.unsqueeze(1) != mask_windows.unsqueeze(2)
 
         # Repeat the mask for the batch dimension
         # attn_mask shape: (n_h * n_w, ws, ws) -> repeat B times -> (B, n_h * n_w, ws, ws)
         repeated_attn_mask = attn_mask.unsqueeze(0).repeat(B, 1, 1, 1)
         # Reshape to match the batched windows dimension: (B * n_h * n_w, ws, ws)
         repeated_attn_mask = repeated_attn_mask.view(num_windows_total, ws, ws)
-
 
         # Manual multi-head attention over windows, with mask applied per-window
         # windows: (num_windows_total, ws, C)
@@ -353,7 +394,9 @@ class SWLMWA(nn.Module):
 
         # reverse windows -> reconstruct (B, C, Hp, Wp)
         # Use window_reverse_nchw to bring the windows back to the padded image shape
-        x2 = window_reverse_nchw(out, (self.wh, self.ww), Hp, Wp, pad_h, pad_w, n_h, n_w, B)
+        x2 = window_reverse_nchw(
+            out, (self.wh, self.ww), Hp, Wp, pad_h, pad_w, n_h, n_w, B
+        )
 
         # reverse cyclic shift (if applied) by positive shift
         if self.shift_size[0] != 0 or self.shift_size[1] != 0:
@@ -366,12 +409,13 @@ class SWLMWA(nn.Module):
         x = x2.view(B, D, h * w).transpose(1, 2).contiguous()
 
         # residual + MLP
-        x = res + x # Add residual connection after attention
-        res2 = x # Second residual connection before MLP
-        x = self.norm2(x) # Pre-normalization before MLP
-        x = res2 + self.mlp(x) # Apply MLP and add residual connection
+        x = res + x  # Add residual connection after attention
+        res2 = x  # Second residual connection before MLP
+        x = self.norm2(x)  # Pre-normalization before MLP
+        x = res2 + self.mlp(x)  # Apply MLP and add residual connection
 
-        return x # Output tensor with the same shape as input (B, N, D)
+        return x  # Output tensor with the same shape as input (B, N, D)
+
 
 class OffsetPredictor(nn.Module):
     """
@@ -380,7 +424,10 @@ class OffsetPredictor(nn.Module):
     Produces offsets shaped (B, N, H, P, 2) in pixel units (dx, dy).
     The output of the linear layer is squashed with tanh and multiplied by offset_scale.
     """
-    def __init__(self, dim: int, num_heads: int, n_points: int, offset_scale: float = 4.0):
+
+    def __init__(
+        self, dim: int, num_heads: int, n_points: int, offset_scale: float = 4.0
+    ):
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
@@ -400,7 +447,10 @@ class OffsetPredictor(nn.Module):
         out = out.tanh() * self.offset_scale  # scaled pixel offsets (dx, dy)
         return out  # (B, N, H, P, 2)
 
-def make_base_grid(h: int, w: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+
+def make_base_grid(
+    h: int, w: int, device: torch.device, dtype: torch.dtype
+) -> torch.Tensor:
     """
     Construct base pixel coordinates for each spatial location.
     Returned shape: (N, 2) with coordinate order (x, y).
@@ -410,28 +460,35 @@ def make_base_grid(h: int, w: int, device: torch.device, dtype: torch.dtype) -> 
     coords_y = torch.arange(h, device=device, dtype=dtype)
     coords_x = torch.arange(w, device=device, dtype=dtype)
     # meshgrid with indexing='ij' gives grid_y shape (h, w) and grid_x shape (h, w)
-    grid_y, grid_x = torch.meshgrid(coords_y, coords_x, indexing='ij')
+    grid_y, grid_x = torch.meshgrid(coords_y, coords_x, indexing="ij")
     # stack as (x, y) per pixel and flatten to (N, 2)
-    base_xy = torch.stack((grid_x, grid_y), dim=-1).reshape(-1, 2)  # (N, 2), columns: (x, y)
+    base_xy = torch.stack((grid_x, grid_y), dim=-1).reshape(
+        -1, 2
+    )  # (N, 2), columns: (x, y)
     return base_xy
+
 
 class FeatureMapProducer(nn.Module):
     """
     Produce key and value feature maps from flattened tokens (B, N, D).
     Produces k_map and v_map each shaped (B, D, h, w).
     """
+
     def __init__(self, dim: int):
         super().__init__()
         self.kv_conv = nn.Conv2d(dim, dim * 2, kernel_size=1, bias=True)
 
-    def forward(self, tokens: torch.Tensor, h: int, w: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, tokens: torch.Tensor, h: int, w: int
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         # tokens: (B, N, D) where N == h * w
         B, N, D = tokens.shape
         feat = tokens.transpose(1, 2).reshape(B, D, h, w)  # (B, D, h, w)
         kv = self.kv_conv(feat)  # (B, 2*D, h, w)
         k_map, v_map = kv.chunk(2, dim=1)  # each (B, D, h, w)
         return k_map, v_map
-    
+
+
 class FeatureSampler:
     """
     Utility functions (not a nn.Module) to sample features at fractional positions using F.grid_sample.
@@ -439,6 +496,7 @@ class FeatureSampler:
     - Sample per-head feature maps: we reshape feature maps into (B*H, C_head, h, w)
     - Build grid and call F.grid_sample with align_corners=True to match normalization convention used.
     """
+
     @staticmethod
     def sample_maps_at_points(
         feature_map: torch.Tensor,
@@ -460,7 +518,9 @@ class FeatureSampler:
         grid = sample_norm.view(B_H, -1, 1, 2)  # (B*H, N*P, 1, 2)
 
         # grid_sample -> output (B*H, C_head, N*P, 1)
-        sampled = F.grid_sample(feature_map, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
+        sampled = F.grid_sample(
+            feature_map, grid, mode="bilinear", padding_mode="zeros", align_corners=True
+        )
 
         # reshape to (B, H, C_head, N, P, 1) -> drop last dim -> (B, H, C_head, N, P)
         # we know B_H = B * H, so recover B and H later
@@ -474,7 +534,8 @@ class FeatureSampler:
         sampled = sampled.squeeze(-1)  # (B*H, C_head, NP)
 
         return sampled  # (B*H, C_head, N*P)
-    
+
+
 class DeformableAttention(nn.Module):
     """
     Readable, modular implementation of deformable attention.
@@ -491,7 +552,15 @@ class DeformableAttention(nn.Module):
         n_points: sampling points per query per head
         offset_scale: scale multiplier for tanh-squashed offsets (in pixels)
     """
-    def __init__(self, dim: int, num_heads: int, n_points: int = 9, offset_scale: float = 4.0, debug: bool = False):
+
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        n_points: int = 9,
+        offset_scale: float = 4.0,
+        debug: bool = False,
+    ):
         super().__init__()
         assert dim % num_heads == 0, "dim must be divisible by num_heads"
         self.dim = dim
@@ -503,14 +572,18 @@ class DeformableAttention(nn.Module):
 
         # modules
         self.to_q = nn.Linear(dim, dim, bias=True)
-        self.offset_predictor = OffsetPredictor(dim, num_heads, n_points, offset_scale=offset_scale)
+        self.offset_predictor = OffsetPredictor(
+            dim, num_heads, n_points, offset_scale=offset_scale
+        )
         self.feature_producer = FeatureMapProducer(dim)
         self.out_proj = nn.Linear(dim, dim, bias=True)
 
     def _split_heads(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, N, D) -> (B, H, N, head_dim)
         B, N, D = x.shape
-        return x.view(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3).contiguous()
+        return (
+            x.view(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3).contiguous()
+        )
 
     def _merge_heads(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, H, N, head_dim) -> (B, N, D)
@@ -540,12 +613,18 @@ class DeformableAttention(nn.Module):
         # 3) Feature maps (k_map, v_map) each (B, D, h, w)
         k_map, v_map = self.feature_producer(x, h, w)  # (B, D, h, w)
         if self.debug:
-            print(f"[DeformableAttention] k_map shape: {k_map.shape}, v_map shape: {v_map.shape}")
+            print(
+                f"[DeformableAttention] k_map shape: {k_map.shape}, v_map shape: {v_map.shape}"
+            )
 
         # 4) Split K and V per head: -> (B*H, head_dim, h, w)
         B, D, _, _ = k_map.shape
-        k_map_heads = k_map.view(B, self.num_heads, self.head_dim, h, w).reshape(B * self.num_heads, self.head_dim, h, w)
-        v_map_heads = v_map.view(B, self.num_heads, self.head_dim, h, w).reshape(B * self.num_heads, self.head_dim, h, w)
+        k_map_heads = k_map.view(B, self.num_heads, self.head_dim, h, w).reshape(
+            B * self.num_heads, self.head_dim, h, w
+        )
+        v_map_heads = v_map.view(B, self.num_heads, self.head_dim, h, w).reshape(
+            B * self.num_heads, self.head_dim, h, w
+        )
 
         # 5) Base grid (pixel coords) and absolute sample positions
         base_xy = make_base_grid(h, w, device=device, dtype=dtype)  # (N, 2) with (x, y)
@@ -557,7 +636,9 @@ class DeformableAttention(nn.Module):
         sample_xy = base_xy.unsqueeze(2).unsqueeze(3) + offsets  # (B, N, H, P, 2)
 
         # normalize sample coordinates to [-1, 1] for grid_sample (x normalized by w-1, y by h-1)
-        norm = torch.tensor([(w - 1), (h - 1)], device=device, dtype=dtype).view(1, 1, 1, 1, 2)
+        norm = torch.tensor([(w - 1), (h - 1)], device=device, dtype=dtype).view(
+            1, 1, 1, 1, 2
+        )
         sample_norm = (sample_xy / norm) * 2.0 - 1.0  # (B, N, H, P, 2)
 
         # 6) Rearrange sample_norm for grid_sample:
@@ -567,36 +648,60 @@ class DeformableAttention(nn.Module):
         sample_norm = sample_norm.view(B_H, N * self.n_points, 2)  # (B*H, N*P, 2)
 
         if self.debug:
-            print(f"[DeformableAttention] sample_norm shape (for grid_sample): {sample_norm.shape}")
+            print(
+                f"[DeformableAttention] sample_norm shape (for grid_sample): {sample_norm.shape}"
+            )
 
         # 7) Use grid_sample to fetch features at sampled points (bilinear interpolation)
         # grid_sample expects (N_batch, C, h, w) and grid shaped (N_batch, H_out, W_out, 2),
         # and returns (N_batch, C, H_out, W_out).
         # We'll set H_out = N * P, W_out = 1
         grid_for_gs = sample_norm.view(B_H, N * self.n_points, 1, 2)  # (B*H, N*P, 1, 2)
-        sampled_k = F.grid_sample(k_map_heads, grid_for_gs, mode='bilinear', padding_mode='zeros', align_corners=True)  # (B*H, hd, N*P, 1)
-        sampled_v = F.grid_sample(v_map_heads, grid_for_gs, mode='bilinear', padding_mode='zeros', align_corners=True)
+        sampled_k = F.grid_sample(
+            k_map_heads,
+            grid_for_gs,
+            mode="bilinear",
+            padding_mode="zeros",
+            align_corners=True,
+        )  # (B*H, hd, N*P, 1)
+        sampled_v = F.grid_sample(
+            v_map_heads,
+            grid_for_gs,
+            mode="bilinear",
+            padding_mode="zeros",
+            align_corners=True,
+        )
 
         # remove last dim and reshape to (B, H, hd, N, P)
-        sampled_k = sampled_k.squeeze(-1).view(B, self.num_heads, self.head_dim, N, self.n_points)
-        sampled_v = sampled_v.squeeze(-1).view(B, self.num_heads, self.head_dim, N, self.n_points)
+        sampled_k = sampled_k.squeeze(-1).view(
+            B, self.num_heads, self.head_dim, N, self.n_points
+        )
+        sampled_v = sampled_v.squeeze(-1).view(
+            B, self.num_heads, self.head_dim, N, self.n_points
+        )
 
         # permute to (B, H, N, P, hd)
         sampled_k = sampled_k.permute(0, 1, 3, 4, 2).contiguous()
         sampled_v = sampled_v.permute(0, 1, 3, 4, 2).contiguous()
 
         if self.debug:
-            print(f"[DeformableAttention] sampled_k shape: {sampled_k.shape}, sampled_v shape: {sampled_v.shape}")
+            print(
+                f"[DeformableAttention] sampled_k shape: {sampled_k.shape}, sampled_v shape: {sampled_v.shape}"
+            )
 
         # 8) Compute attention logits and weights
         # q: (B, H, N, hd) ; sampled_k: (B, H, N, P, hd)
         # compute dot product along hd -> (B, H, N, P)
         # use einsum for clarity
-        attn_logits = torch.einsum('bhnd,bhnpd->bhnp', q, sampled_k) * (self.head_dim ** -0.5)
+        attn_logits = torch.einsum("bhnd,bhnpd->bhnp", q, sampled_k) * (
+            self.head_dim**-0.5
+        )
         attn_weights = F.softmax(attn_logits, dim=-1)  # (B, H, N, P)
 
         # 9) Weighted sum of sampled_v -> (B, H, N, hd)
-        out_heads = torch.einsum('bhnp,bhnpd->bhnd', attn_weights, sampled_v)  # (B, H, N, hd)
+        out_heads = torch.einsum(
+            "bhnp,bhnpd->bhnd", attn_weights, sampled_v
+        )  # (B, H, N, hd)
 
         # 10) Merge heads and project
         out = self._merge_heads(out_heads)  # (B, N, D)
@@ -606,15 +711,27 @@ class DeformableAttention(nn.Module):
             print(f"[DeformableAttention] out shape: {out.shape}")
 
         return out
-    
+
+
 class DLMWA(nn.Module):
     """
     Local mixing block wrapping DeformableAttention with LayerNorm and MLP (residuals).
     """
-    def __init__(self, dim: int, num_heads: int, mlp_ratio: float = 2.0, n_points: int = 9, offset_scale: float = 4.0, debug: bool = False):
+
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float = 2.0,
+        n_points: int = 9,
+        offset_scale: float = 4.0,
+        debug: bool = False,
+    ):
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
-        self.attn = DeformableAttention(dim, num_heads, n_points=n_points, offset_scale=offset_scale, debug=debug)
+        self.attn = DeformableAttention(
+            dim, num_heads, n_points=n_points, offset_scale=offset_scale, debug=debug
+        )
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = MLP(dim, ratio=mlp_ratio)
         self.debug = debug
@@ -634,27 +751,35 @@ class DLMWA(nn.Module):
             print(f"[DLMWA] output: {x.shape}")
         return x
 
+
 class LocalMixingConv(nn.Module):
     """
     A fast local mixing implemented by depthwise convolution followed by pointwise projection.
     Works as a local mixing alternative to window attention (useful for speed).
     """
-    def __init__(self, dim, kernel_size=(7,11), mlp_ratio=2.0, drop=0.0):
+
+    def __init__(self, dim, kernel_size=(7, 11), mlp_ratio=2.0, drop=0.0):
         super().__init__()
         kh, kw = kernel_size
-        self.norm1 = nn.LayerNorm(dim) # Layer normalization before depthwise convolution
+        self.norm1 = nn.LayerNorm(
+            dim
+        )  # Layer normalization before depthwise convolution
         # Depthwise convolution: applies a separate convolution to each input channel
-        self.dw = nn.Conv2d(dim, dim, kernel_size=(kh, kw), padding=(kh//2, kw//2), groups=dim)
+        self.dw = nn.Conv2d(
+            dim, dim, kernel_size=(kh, kw), padding=(kh // 2, kw // 2), groups=dim
+        )
         # Pointwise convolution: 1x1 convolution to mix information across channels
         self.pw = nn.Conv2d(dim, dim, kernel_size=1)
-        self.norm2 = nn.LayerNorm(dim) # Layer normalization before MLP
-        self.mlp = MLP(dim, ratio=mlp_ratio, drop=drop) # MLP block
+        self.norm2 = nn.LayerNorm(dim)  # Layer normalization before MLP
+        self.mlp = MLP(dim, ratio=mlp_ratio, drop=drop)  # MLP block
 
     def forward(self, x, h, w):
         # x: (B, N, D) where B is batch size, N is sequence length (h*w), D is dimension
         B, N, D = x.shape
-        assert N == h * w, "N must equal h*w" # Assert sequence length matches spatial dimensions
-        res = x # Residual connection
+        assert (
+            N == h * w
+        ), "N must equal h*w"  # Assert sequence length matches spatial dimensions
+        res = x  # Residual connection
 
         # Pre-normalization
         x = self.norm1(x)
@@ -681,7 +806,8 @@ class LocalMixingConv(nn.Module):
         # Apply MLP and add residual connection
         x = res + self.mlp(x)
 
-        return x # Output tensor with the same shape as input (B, N, D)
+        return x  # Output tensor with the same shape as input (B, N, D)
+
 
 class Merging(nn.Module):
     """
@@ -689,9 +815,10 @@ class Merging(nn.Module):
     Input x: (B, N, D) with h,w provided.
     Returns x_new (B, N_new, D_out), and new (h, w).
     """
+
     def __init__(self, in_dim, out_dim):
         super().__init__()
-        self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=3, stride=(2,1), padding=1)
+        self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=3, stride=(2, 1), padding=1)
         self.norm = nn.LayerNorm(out_dim)
 
     def forward(self, x, h, w):
@@ -702,11 +829,13 @@ class Merging(nn.Module):
         x = x2.flatten(2).transpose(1, 2).contiguous()  # (B, hp*wp, out_dim)
         x = self.norm(x)
         return x, hp, wp
-    
+
+
 class Combining(nn.Module):
     """
     Combine across height: collapse height via mean and project channels to out_dim.
     """
+
     def __init__(self, in_dim, out_dim, drop=0.0):
         super().__init__()
         self.fc = nn.Linear(in_dim, out_dim)
@@ -725,6 +854,7 @@ class Combining(nn.Module):
         x2 = self.act(x2)
         x2 = self.drop(x2)
         return x2  # (B, w, out_dim)
+
 
 class SVTR(nn.Module):
     """
@@ -749,46 +879,59 @@ class SVTR(nn.Module):
         n_points (int): Number of sampling points for Deformable Attention. Defaults to 9.
         offset_scale (float): Scaling factor for Deformable Attention offsets. Defaults to 4.0.
     """
-    def __init__(self,
-                 img_size=(64, 256),
-                 in_chans=3,
-                 vocab_size=100,
-                 embed_dims=(64, 128, 256),
-                 d3=192,
-                 heads=(2, 4, 8),
-                 mlp_ratio=2.0,
-                 window_sizes=[(7, 11)] * 12 + [(3,3)] * 6, # Default window sizes if not provided
-                 num_blocks=(3, 6, 3),
-                 pattern=None,
-                 local_type=None,
-                 drop=0.0,
-                 n_points=9,
-                 offset_scale=4.0):
+
+    def __init__(
+        self,
+        img_size=(64, 256),
+        in_chans=3,
+        vocab_size=100,
+        embed_dims=(64, 128, 256),
+        d3=192,
+        heads=(2, 4, 8),
+        mlp_ratio=2.0,
+        window_sizes=[(7, 11)] * 12
+        + [(3, 3)] * 6,  # Default window sizes if not provided
+        num_blocks=(3, 6, 3),
+        pattern=None,
+        local_type=None,
+        drop=0.0,
+        n_points=9,
+        offset_scale=4.0,
+    ):
         super().__init__()
 
         # pattern length must cover sum(num_blocks). L = local, G = global
         total_blocks = sum(num_blocks)
-        assert pattern is not None and len(pattern) == total_blocks, f"Pattern must be a list of length {total_blocks} specifying 'L' or 'G' for each block."
+        assert (
+            pattern is not None and len(pattern) == total_blocks
+        ), f"Pattern must be a list of length {total_blocks} specifying 'L' or 'G' for each block."
 
         # Ensure local_type is a list and matches the number of local blocks in the pattern
-        assert isinstance(local_type, list), "local_type must be a list specifying block types."
-        num_local_blocks = pattern.count('L')
-        assert len(local_type) >= num_local_blocks, f"Length of local_type list ({len(local_type)}) must match the number of local blocks in pattern ({num_local_blocks})."
+        assert isinstance(
+            local_type, list
+        ), "local_type must be a list specifying block types."
+        num_local_blocks = pattern.count("L")
+        assert (
+            len(local_type) >= num_local_blocks
+        ), f"Length of local_type list ({len(local_type)}) must match the number of local blocks in pattern ({num_local_blocks})."
         self.local_type_list = local_type
 
         # Ensure window_sizes list length matches the number of local blocks
         assert isinstance(window_sizes, list), "window_sizes must be a list of tuples."
-        assert len(window_sizes) >= num_local_blocks, f"Length of window_sizes list ({len(window_sizes)}) must match the number of local blocks in pattern ({num_local_blocks})."
+        assert (
+            len(window_sizes) >= num_local_blocks
+        ), f"Length of window_sizes list ({len(window_sizes)}) must match the number of local blocks in pattern ({num_local_blocks})."
         self.window_sizes_list = window_sizes
-
 
         self.patch_embed = PatchEmbedSVTR(img_size, in_chans, embed_dim=embed_dims[0])
         self.patches_resolution = self.patch_embed.patches_resolution
-        dims = list(embed_dims) # Convert to list
-        self.pos_embed = nn.Parameter(torch.zeros(1, self.patch_embed.num_patches, dims[0]))  # learnable positional embedding
-        self.n_points = n_points # Store for Deformable Attention
-        self.offset_scale = offset_scale # Store for Deformable Attention
-        self.drop_rate = drop # Store dropout rate
+        dims = list(embed_dims)  # Convert to list
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, self.patch_embed.num_patches, dims[0])
+        )  # learnable positional embedding
+        self.n_points = n_points  # Store for Deformable Attention
+        self.offset_scale = offset_scale  # Store for Deformable Attention
+        self.drop_rate = drop  # Store dropout rate
 
         # Build the model stages based on the pattern and local_type
         cur_pattern_idx = 0
@@ -799,25 +942,56 @@ class SVTR(nn.Module):
         self.stage1 = nn.ModuleList()
         for i in range(num_blocks[0]):
             tp = pattern[cur_pattern_idx]
-            if tp == 'L':
+            if tp == "L":
                 current_local_type = self.local_type_list[cur_local_type_idx]
                 current_window_size = self.window_sizes_list[cur_window_size_idx]
-                if current_local_type == 'non_overlapping':
-                    blk = NOLMWA(dims[0], heads[0], mlp_ratio, current_window_size, self.drop_rate)
-                elif current_local_type == 'swin':
+                if current_local_type == "non_overlapping":
+                    blk = NOLMWA(
+                        dims[0],
+                        heads[0],
+                        mlp_ratio,
+                        current_window_size,
+                        self.drop_rate,
+                    )
+                elif current_local_type == "swin":
                     # Alternate shift for SWIN
-                    do_shift = (i % 2 == 1)
-                    shift_size = (current_window_size[0] // 2, current_window_size[1] // 2) if do_shift else (0, 0)
-                    blk = SWLMWA(dims[0], heads[0], mlp_ratio, current_window_size, self.drop_rate, shift_size)
-                elif current_local_type == 'deformable':
-                    blk = DLMWA(dims[0], heads[0], mlp_ratio, self.n_points, self.offset_scale, debug=False) # debug=False by default
-                elif current_local_type == 'conv':
-                    blk = LocalMixingConv(dims[0], kernel_size=current_window_size, mlp_ratio=mlp_ratio, drop=self.drop_rate)
+                    do_shift = i % 2 == 1
+                    shift_size = (
+                        (current_window_size[0] // 2, current_window_size[1] // 2)
+                        if do_shift
+                        else (0, 0)
+                    )
+                    blk = SWLMWA(
+                        dims[0],
+                        heads[0],
+                        mlp_ratio,
+                        current_window_size,
+                        self.drop_rate,
+                        shift_size,
+                    )
+                elif current_local_type == "deformable":
+                    blk = DLMWA(
+                        dims[0],
+                        heads[0],
+                        mlp_ratio,
+                        self.n_points,
+                        self.offset_scale,
+                        debug=False,
+                    )  # debug=False by default
+                elif current_local_type == "conv":
+                    blk = LocalMixingConv(
+                        dims[0],
+                        kernel_size=current_window_size,
+                        mlp_ratio=mlp_ratio,
+                        drop=self.drop_rate,
+                    )
                 else:
-                    raise ValueError(f"Unknown local_type '{current_local_type}' for block {cur_pattern_idx}")
+                    raise ValueError(
+                        f"Unknown local_type '{current_local_type}' for block {cur_pattern_idx}"
+                    )
                 cur_local_type_idx += 1
                 cur_window_size_idx += 1
-            else: # Global mixing
+            else:  # Global mixing
                 blk = GlobalMixing(dims[0], heads[0], mlp_ratio, self.drop_rate)
             self.stage1.append(blk)
             cur_pattern_idx += 1
@@ -828,24 +1002,55 @@ class SVTR(nn.Module):
         self.stage2 = nn.ModuleList()
         for i in range(num_blocks[1]):
             tp = pattern[cur_pattern_idx]
-            if tp == 'L':
+            if tp == "L":
                 current_local_type = self.local_type_list[cur_local_type_idx]
                 current_window_size = self.window_sizes_list[cur_window_size_idx]
-                if current_local_type == 'non_overlapping':
-                    blk = NOLMWA(dims[1], heads[1], mlp_ratio, current_window_size, self.drop_rate)
-                elif current_local_type == 'swin':
-                    do_shift = (i % 2 == 1)
-                    shift_size = (current_window_size[0] // 2, current_window_size[1] // 2) if do_shift else (0, 0)
-                    blk = SWLMWA(dims[1], heads[1], mlp_ratio, current_window_size, self.drop_rate, shift_size)
-                elif current_local_type == 'deformable':
-                    blk = DLMWA(dims[1], heads[1], mlp_ratio, self.n_points, self.offset_scale, debug=False)
-                elif current_local_type == 'conv':
-                    blk = LocalMixingConv(dims[1], kernel_size=current_window_size, mlp_ratio=mlp_ratio, drop=self.drop_rate)
+                if current_local_type == "non_overlapping":
+                    blk = NOLMWA(
+                        dims[1],
+                        heads[1],
+                        mlp_ratio,
+                        current_window_size,
+                        self.drop_rate,
+                    )
+                elif current_local_type == "swin":
+                    do_shift = i % 2 == 1
+                    shift_size = (
+                        (current_window_size[0] // 2, current_window_size[1] // 2)
+                        if do_shift
+                        else (0, 0)
+                    )
+                    blk = SWLMWA(
+                        dims[1],
+                        heads[1],
+                        mlp_ratio,
+                        current_window_size,
+                        self.drop_rate,
+                        shift_size,
+                    )
+                elif current_local_type == "deformable":
+                    blk = DLMWA(
+                        dims[1],
+                        heads[1],
+                        mlp_ratio,
+                        self.n_points,
+                        self.offset_scale,
+                        debug=False,
+                    )
+                elif current_local_type == "conv":
+                    blk = LocalMixingConv(
+                        dims[1],
+                        kernel_size=current_window_size,
+                        mlp_ratio=mlp_ratio,
+                        drop=self.drop_rate,
+                    )
                 else:
-                     raise ValueError(f"Unknown local_type '{current_local_type}' for block {cur_pattern_idx}")
+                    raise ValueError(
+                        f"Unknown local_type '{current_local_type}' for block {cur_pattern_idx}"
+                    )
                 cur_local_type_idx += 1
                 cur_window_size_idx += 1
-            else: # Global mixing
+            else:  # Global mixing
                 blk = GlobalMixing(dims[1], heads[1], mlp_ratio, self.drop_rate)
             self.stage2.append(blk)
             cur_pattern_idx += 1
@@ -856,24 +1061,55 @@ class SVTR(nn.Module):
         self.stage3 = nn.ModuleList()
         for i in range(num_blocks[2]):
             tp = pattern[cur_pattern_idx]
-            if tp == 'L':
+            if tp == "L":
                 current_local_type = self.local_type_list[cur_local_type_idx]
                 current_window_size = self.window_sizes_list[cur_window_size_idx]
-                if current_local_type == 'non_overlapping':
-                    blk = NOLMWA(dims[2], heads[2], mlp_ratio, current_window_size, self.drop_rate)
-                elif current_local_type == 'swin':
-                    do_shift = (i % 2 == 1)
-                    shift_size = (current_window_size[0] // 2, current_window_size[1] // 2) if do_shift else (0, 0)
-                    blk = SWLMWA(dims[2], heads[2], mlp_ratio, current_window_size, self.drop_rate, shift_size)
-                elif current_local_type == 'deformable':
-                    blk = DLMWA(dims[2], heads[2], mlp_ratio, self.n_points, self.offset_scale, debug=False)
-                elif current_local_type == 'conv':
-                    blk = LocalMixingConv(dims[2], kernel_size=current_window_size, mlp_ratio=mlp_ratio, drop=self.drop_rate)
+                if current_local_type == "non_overlapping":
+                    blk = NOLMWA(
+                        dims[2],
+                        heads[2],
+                        mlp_ratio,
+                        current_window_size,
+                        self.drop_rate,
+                    )
+                elif current_local_type == "swin":
+                    do_shift = i % 2 == 1
+                    shift_size = (
+                        (current_window_size[0] // 2, current_window_size[1] // 2)
+                        if do_shift
+                        else (0, 0)
+                    )
+                    blk = SWLMWA(
+                        dims[2],
+                        heads[2],
+                        mlp_ratio,
+                        current_window_size,
+                        self.drop_rate,
+                        shift_size,
+                    )
+                elif current_local_type == "deformable":
+                    blk = DLMWA(
+                        dims[2],
+                        heads[2],
+                        mlp_ratio,
+                        self.n_points,
+                        self.offset_scale,
+                        debug=False,
+                    )
+                elif current_local_type == "conv":
+                    blk = LocalMixingConv(
+                        dims[2],
+                        kernel_size=current_window_size,
+                        mlp_ratio=mlp_ratio,
+                        drop=self.drop_rate,
+                    )
                 else:
-                    raise ValueError(f"Unknown local_type '{current_local_type}' for block {cur_pattern_idx}")
+                    raise ValueError(
+                        f"Unknown local_type '{current_local_type}' for block {cur_pattern_idx}"
+                    )
                 cur_local_type_idx += 1
                 cur_window_size_idx += 1
-            else: # Global mixing
+            else:  # Global mixing
                 blk = GlobalMixing(dims[2], heads[2], mlp_ratio, self.drop_rate)
             self.stage3.append(blk)
             cur_pattern_idx += 1
@@ -893,7 +1129,7 @@ class SVTR(nn.Module):
         """
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_uniform_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.kaiming_uniform_(m.weight, mode="fan_out", nonlinearity="relu")
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.Linear):
@@ -904,17 +1140,18 @@ class SVTR(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
             elif isinstance(m, PatchEmbedSVTR):
-                        # Initialize convolution layers within PatchEmbedSVTR
-                        for conv in [m.conv1, m.conv2]:  # Adjust based on actual structure
-                            if isinstance(conv, nn.Conv2d):
-                                nn.init.kaiming_uniform_(conv.weight, mode='fan_out', nonlinearity='relu')
-                                if conv.bias is not None:
-                                    nn.init.constant_(conv.bias, 0)
+                # Initialize convolution layers within PatchEmbedSVTR
+                for conv in [m.conv1, m.conv2]:  # Adjust based on actual structure
+                    if isinstance(conv, nn.Conv2d):
+                        nn.init.kaiming_uniform_(
+                            conv.weight, mode="fan_out", nonlinearity="relu"
+                        )
+                        if conv.bias is not None:
+                            nn.init.constant_(conv.bias, 0)
 
         # Initialize positional embedding with truncated normal distribution
         if self.pos_embed is not None:
-            nn.init.trunc_normal_(self.pos_embed, std=.02)
-
+            nn.init.trunc_normal_(self.pos_embed, std=0.02)
 
     def forward(self, x):
         """
@@ -936,7 +1173,9 @@ class SVTR(nn.Module):
         x = x + self.pos_embed
         # Output shape: (B, N, D) where N is number of patches, D is embed_dim[0]
         # N = (H/4) * (W/4)
-        h, w = self.patch_embed.patches_resolution # Spatial dimensions after patch embedding (H/4, W/4)
+        h, w = (
+            self.patch_embed.patches_resolution
+        )  # Spatial dimensions after patch embedding (H/4, W/4)
 
         # Build the model stages based on the pattern and local_type
         cur_pattern_idx = 0
@@ -947,8 +1186,8 @@ class SVTR(nn.Module):
         # Input shape: (B, N, embed_dims[0]) e.g., (B, 2048, 64) from patches_resolution (16, 128)
         for i in range(len(self.stage1)):
             blk = self.stage1[i]
-            tp = config['pattern'][cur_pattern_idx] # Get pattern from config
-            if tp == 'L':
+            tp = config["pattern"][cur_pattern_idx]  # Get pattern from config
+            if tp == "L":
                 # Local mixing requires spatial dimensions h, w
                 x = blk(x, h, w)
                 cur_local_type_idx += 1
@@ -970,8 +1209,8 @@ class SVTR(nn.Module):
         # Input shape: (B, N_new, embed_dims[1])
         for i in range(len(self.stage2)):
             blk = self.stage2[i]
-            tp = config['pattern'][cur_pattern_idx] # Get pattern from config
-            if tp == 'L':
+            tp = config["pattern"][cur_pattern_idx]  # Get pattern from config
+            if tp == "L":
                 x = blk(x, h, w)
                 cur_local_type_idx += 1
                 cur_window_size_idx += 1
@@ -990,8 +1229,8 @@ class SVTR(nn.Module):
         # Input shape: (B, N_new_new, embed_dims[2])
         for i in range(len(self.stage3)):
             blk = self.stage3[i]
-            tp = config['pattern'][cur_pattern_idx] # Get pattern from config
-            if tp == 'L':
+            tp = config["pattern"][cur_pattern_idx]  # Get pattern from config
+            if tp == "L":
                 x = blk(x, h, w)
                 cur_local_type_idx += 1
                 cur_window_size_idx += 1
@@ -1014,102 +1253,111 @@ class SVTR(nn.Module):
 
         return x
 
+
 if __name__ == "__main__":
     config = {
         # Dataset parameteres
-        'on_colab': False,   # else Kaggle
-        'use_drive': False, # else Kaggle
+        "on_colab": False,  # else Kaggle
+        "use_drive": False,  # else Kaggle
         # 'dataset_dir': '/content/Arabic_English_OCR_Dataset', # Kaggle
-        'dataset_dir': '/kaggle/input/arabic-english-ocr-dataset/Arabic_English_OCR_Dataset', # Drive
-        'ar_dir': 'ar',
-        'en_dir': 'en',
-        'labels_file': 'labels.txt',
-        'max_samples': 80000,  # full is 200000
-        'max_text_length': 32,              # Maximum text sequence length
-        'permissible_chars': set(
-                        " !\"#$%&'()*+,-./:;=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]_`abcdefghijklmnopqrstuvwxyz{|}،؛؟٫٬٭"
-                        "0123456789ءآأؤإئابةتثجحخدذرزسشصضطظعغفقكلمنهوىيًٌٍَُِّْ٠١٢٣٤٥٦٧٨٩"
-                        "‘’“”"
-                    ),
-        'vocab_size': 162,                  # Will be updated after dataset analysis
-        'train_split_percentage': 0.8,      # Percentage for training set
-        'val_split_percentage': 0.1,        # Percentage for validation set
-        'test_split_percentage': 0.1,       # Percentage for test set
-        'remove_bad_examples': True,        # remove examples with not permissible chars else remove these characters instead in the text
-        'do_analysis': True,               # To do Analysis on the dataset (text --> lengths & chars, images --> shape)
-
+        "dataset_dir": "/kaggle/input/arabic-english-ocr-dataset/Arabic_English_OCR_Dataset",  # Drive
+        "ar_dir": "ar",
+        "en_dir": "en",
+        "labels_file": "labels.txt",
+        "max_samples": 80000,  # full is 200000
+        "max_text_length": 32,  # Maximum text sequence length
+        "permissible_chars": set(
+            " !\"#$%&'()*+,-./:;=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]_`abcdefghijklmnopqrstuvwxyz{|}،؛؟٫٬٭"
+            "0123456789ءآأؤإئابةتثجحخدذرزسشصضطظعغفقكلمنهوىيًٌٍَُِّْ٠١٢٣٤٥٦٧٨٩"
+            "‘’“”"
+        ),
+        "vocab_size": 162,  # Will be updated after dataset analysis
+        "train_split_percentage": 0.8,  # Percentage for training set
+        "val_split_percentage": 0.1,  # Percentage for validation set
+        "test_split_percentage": 0.1,  # Percentage for test set
+        "remove_bad_examples": True,  # remove examples with not permissible chars else remove these characters instead in the text
+        "do_analysis": True,  # To do Analysis on the dataset (text --> lengths & chars, images --> shape)
         # Image parameters - SVTR standard
-        'img_height': 64,  # SVTR uses 64 height
-        'img_width': 512,  # SVTR uses 256 width, but seeding the mean width of dataset we use 512
-        'channels': 3,
-
+        "img_height": 64,  # SVTR uses 64 height
+        "img_width": 512,  # SVTR uses 256 width, but seeding the mean width of dataset we use 512
+        "channels": 3,
         # Model Parameters - SVTR Large
-        'embed_dims': [128, 256, 384],
-        'd3': 512,
-        'heads': [4, 8, 12],                # heads chosen such that embed_dim / num_heads == 32 (nice head dim)
-        'num_blocks': [3, 6, 3],            # [3, 12, 3]
-        'pattern': ['L'] * 6 + ['G'] * 6,   #['L'] * 9 + ['G'] * 9
-        #['non_overlapping', 'non_overlapping', 'deformable'] * 3 + ['conv'] * 9, #non_overlapping,swin,deformable,conv
-        'local_type': ['non_overlapping', 'non_overlapping', 'deformable'] * 2 + ['conv'] * 6 ,
-        'window_sizes': [(7,11)] * 6 + [(3,3)] * 6, # [(7,11)] * 9 + [(3,3)] * 9
-        'mlp_ratio': 2,
-        'dropout_rate': 0.1,
-        'n_points': 9,
-        'offset_scale': 4.0,
-
-
+        "embed_dims": [128, 256, 384],
+        "d3": 512,
+        "heads": [
+            4,
+            8,
+            12,
+        ],  # heads chosen such that embed_dim / num_heads == 32 (nice head dim)
+        "num_blocks": [3, 6, 3],  # [3, 12, 3]
+        "pattern": ["L"] * 6 + ["G"] * 6,  # ['L'] * 9 + ['G'] * 9
+        # ['non_overlapping', 'non_overlapping', 'deformable'] * 3 + ['conv'] * 9, #non_overlapping,swin,deformable,conv
+        "local_type": ["non_overlapping", "non_overlapping", "deformable"] * 2
+        + ["conv"] * 6,
+        "window_sizes": [(7, 11)] * 6 + [(3, 3)] * 6,  # [(7,11)] * 9 + [(3,3)] * 9
+        "mlp_ratio": 2,
+        "dropout_rate": 0.1,
+        "n_points": 9,
+        "offset_scale": 4.0,
         # Training parameters
-        'num_epochs': 20,
-        'learning_rate': 3e-4,
-        'weight_decay': 1e-5,
-        'warmup_epochs': 5,
-        'gradient_clip': 1.0,
-
+        "num_epochs": 20,
+        "learning_rate": 3e-4,
+        "weight_decay": 1e-5,
+        "warmup_epochs": 5,
+        "gradient_clip": 1.0,
         # Augmentation parameters
-        'aug_prob': 0.7,
-        'rotation_limit': 5,
-        'blur_limit': 3,
-        'brightness_limit': 0.2,
-        'contrast_limit': 0.2,
+        "aug_prob": 0.7,
+        "rotation_limit": 5,
+        "blur_limit": 3,
+        "brightness_limit": 0.2,
+        "contrast_limit": 0.2,
         # 'dataset_mean': [0.485, 0.456, 0.406],       #--> ImageNet Values
         # 'dataset_std': [0.229, 0.224, 0.225],        #--> ImageNet Values
-        'dataset_mean': [0.615, 0.617, 0.616],       #--> this dataset Values
-        'dataset_std': [0.271, 0.276, 0.273],        #--> this dataset Values
-
+        "dataset_mean": [0.615, 0.617, 0.616],  # --> this dataset Values
+        "dataset_std": [0.271, 0.276, 0.273],  # --> this dataset Values
         # Other parameters
-        'save_path_directory': './arabic_ocr_checkpoints',
+        "save_path_directory": "./arabic_ocr_checkpoints",
         # 'load_model_path': kagglehub.model_download("ahmedkamal75/arabic_ppocr_1.0/pyTorch/default"),
-        'beam_size': 4,  # For beam search during inference
-        'SEED': 42,
-
+        "beam_size": 4,  # For beam search during inference
+        "SEED": 42,
         # DataLoader parameters
-        'dataloader_params': {
-            'batch_size': 32, # Increased batch size for visualization
-            'num_workers': 4,
-            'pin_memory': True, # Set to False when not using CUDA
+        "dataloader_params": {
+            "batch_size": 32,  # Increased batch size for visualization
+            "num_workers": 4,
+            "pin_memory": True,  # Set to False when not using CUDA
             # Add other DataLoader parameters here if needed, e.g.,
-            'persistent_workers': True, # Use with num_workers > 0
+            "persistent_workers": True,  # Use with num_workers > 0
         },
-        'device': 'cuda' if torch.cuda.is_available() else 'cpu'
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
     }
 
-    model = SVTR(
-        img_size=(config['img_height'], config['img_width']),
-        in_chans=config['channels'],
-        vocab_size=config['vocab_size'],
-        local_type=config['local_type'], # Use the list from config
-        embed_dims=config['embed_dims'], # Use embed_dims from config
-        heads=config['heads'], # Use heads from config
-        mlp_ratio=config['mlp_ratio'], # Use mlp_ratio from config
-        window_sizes=config['window_sizes'], # Use window_sizes from config
-        num_blocks=config['num_blocks'], # Use num_blocks from config
-        pattern=config['pattern'], # Use pattern from config
-        drop=config['dropout_rate'], # Use dropout_rate from config
-        n_points=config['n_points'], # Use n_points from config
-        offset_scale=config['offset_scale'], # Use offset_scale from config
-    ).to(config['device']).eval()
+    model = (
+        SVTR(
+            img_size=(config["img_height"], config["img_width"]),
+            in_chans=config["channels"],
+            vocab_size=config["vocab_size"],
+            local_type=config["local_type"],  # Use the list from config
+            embed_dims=config["embed_dims"],  # Use embed_dims from config
+            heads=config["heads"],  # Use heads from config
+            mlp_ratio=config["mlp_ratio"],  # Use mlp_ratio from config
+            window_sizes=config["window_sizes"],  # Use window_sizes from config
+            num_blocks=config["num_blocks"],  # Use num_blocks from config
+            pattern=config["pattern"],  # Use pattern from config
+            drop=config["dropout_rate"],  # Use dropout_rate from config
+            n_points=config["n_points"],  # Use n_points from config
+            offset_scale=config["offset_scale"],  # Use offset_scale from config
+        )
+        .to(config["device"])
+        .eval()
+    )
 
-    dummy = torch.randn(2, config['channels'], config['img_height'], config['img_width'], device=config['device'])
+    dummy = torch.randn(
+        2,
+        config["channels"],
+        config["img_height"],
+        config["img_width"],
+        device=config["device"],
+    )
     with torch.no_grad():
         out = model(dummy)
 
@@ -1117,13 +1365,10 @@ if __name__ == "__main__":
     print(f"Output shape: {out.shape}")
     # The expected output shape is (batch_size, final_width, vocab_size)
     # From the summary, the final width is 128.
-    assert out.shape == torch.zeros((2, config['img_width'] // 4, config['vocab_size'])).shape, "Output shape does not match expected shape!"
+    assert (
+        out.shape
+        == torch.zeros((2, config["img_width"] // 4, config["vocab_size"])).shape
+    ), "Output shape does not match expected shape!"
     print("Test passed: Output shape matches expected shape.")
 
     summary(model, input_size=dummy.shape)
-
-
-
-
-
-
