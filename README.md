@@ -2,7 +2,8 @@
 # Multilingual Arabic-English SVTR OCR Recognizer
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
-[![Kaggle Notebook](https://img.shields.io/badge/kaggle-notebook-blue)](https://www.kaggle.com/code/ahmedkamal75/multilingual-arabic-english-svtr-ocr-recongnizer)
+[![Kaggle Notebook 1](https://img.shields.io/badge/kaggle-notebook-blue)](https://www.kaggle.com/code/ahmedkamal75/multilingual-arabic-english-svtr-ocr-recongnizer)
+[![Kaggle Notebook 2](https://img.shields.io/badge/kaggle-notebook-blue)](https://www.kaggle.com/code/akamalkaggle117511/multilingual-arabic-english-svtr-ocr-recongnizer)
 [![Model (Kaggle)](https://img.shields.io/badge/model-kaggle-orange)](https://www.kaggle.com/models/ahmedkamal75/svtr_deformable_large_epoch_58)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 
@@ -199,6 +200,28 @@ This demonstrates the **domain gap**: synthetic-only training does not generaliz
 
 ---
 
+## 🔍 Correct & Non-Correct Examples
+
+The following images are examples of correct and non-correct OCR predictions from the model.
+
+### Correct Examples
+
+![Correct Examples](examples/currect_0.png)
+![Correct Examples](examples/currect_1.png)
+![Correct Examples](examples/currect_2.png)
+![Correct Examples](examples/currect_3.png)
+![Correct Examples](examples/currect_4.png)
+![Correct Examples](examples/currect_5.png)
+
+### Non-Correct Examples
+
+![Non-Correct Examples](examples/not_currect_0.png)
+![Non-Correct Examples](examples/not_currect_1.png)
+![Non-Correct Examples](examples/not_currect_2.png)
+![Non-Correct Examples](examples/not_currect_3.png)
+![Non-Correct Examples](examples/not_currect_4.png)
+![Non-Correct Examples](examples/not_currect_5.png)
+
 ## 📌 Key Learnings
 
 1. **Dataset matters more than model size**
@@ -229,6 +252,9 @@ This demonstrates the **domain gap**: synthetic-only training does not generaliz
 ## 🔮 Future Work
 
 * Collect and integrate **real-world Arabic-English text images**.
+* Evaluate whether training on Arabic-only, English-only, or multilingual (Arabic+English) data yields better OCR performance.
+* Train a model on both easy and hard synthetic datasets to leverage the strengths of each.
+* Change input shape to (height, width) ~ (32, 512) to enable efficient computation and longer output sequence lengths for easier CTCLoss calculation.
 * Explore **semi-supervised learning** with unlabeled text images.
 * Benchmark against **other STR models** (e.g., SVTRv2, PARSeq, ABINet).
 * Try **SVTRv2**, a more powerful and flexible STR model, on this dataset.
@@ -239,6 +265,7 @@ This demonstrates the **domain gap**: synthetic-only training does not generaliz
 
 * [SVTR: Scene Text Recognition with a Single Visual Model](https://arxiv.org/abs/2205.00159)
 * [Kaggle Notebook (Logs)](https://www.kaggle.com/code/ahmedkamal75/multilingual-arabic-english-svtr-ocr-recongnizer)
+* [Another Kaggle Notebook (logs)](https://www.kaggle.com/code/akamalkaggle117511/multilingual-arabic-english-svtr-ocr-recongnizer)
 * [Dataset V1](https://www.kaggle.com/datasets/ahmedkamal75/arabic-english-ocr-dataset)
 * [Dataset V2](https://www.kaggle.com/datasets/ahmedkamal75/arabic-english-ocr-synthatic-dataset-v2)
 * [Best Large Model (Epoch 58)](https://www.kaggle.com/models/ahmedkamal75/svtr_deformable_large_epoch_58)
