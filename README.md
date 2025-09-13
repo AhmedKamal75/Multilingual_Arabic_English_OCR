@@ -75,26 +75,40 @@ Both versions use:
 
 ## ⚙️ How to Use
 
+Before running inference, make sure to **download the trained model checkpoint** and place it under the `models/` directory.  
+👉 Best-performing model: [model.pth](https://www.kaggle.com/models/ahmedkamal75/svtr_deformable_large_epoch_58)
+
 The main entry point for evaluation is **`inference.py`**, which loads a trained checkpoint and runs OCR on input images.
 
 Example command:
 
 ```bash
 python inference.py \
-    --model_path models/svtr_deformable_large_epoch_58.pth \
-    --image_path ./test_dataset_ocr/ \
-    --output_dir ./results/ \
+    --model_path models/model.pth \
+    --image_path test_dataset_ocr/ar/ \
+    --output_dir results/ar \
+    --visualize \
     --analyze \
-    --visualize
+    --labels_file test_dataset_ocr/ar/ar_ground_truth.txt \
+    --use_beam \
+    --beam_size 20 \
+    --batch_size 4 \
+    --keep_aspect
 ```
 
 ### Arguments
 
-* `--model_path`: Path to the trained model checkpoint (e.g., [best model here](https://www.kaggle.com/models/ahmedkamal75/svtr_deformable_large_epoch_58)).
-* `--image_path`: A single image or a directory of test images.
+* `--model_path`: Path to the trained model checkpoint (download first).
+* `--image_path`: Path to a single image or a test dataset directory (e.g., `test_dataset_ocr/ar/`).
 * `--output_dir`: Directory to save predictions and visualizations.
-* `--analyze`: (optional) Runs dataset-style analysis (CER/WER, accuracies) like during training.
-* `--visualize`: (optional) Saves annotated images with recognized text overlaid.
+* `--visualize`: Save annotated images with recognized text overlaid.
+* `--analyze`: Run dataset-style analysis (CER/WER, accuracies).
+* `--labels_file`: Ground-truth labels file for evaluation.
+* `--use_beam`: Enable beam search decoding.
+* `--beam_size`: Beam width (default 20).
+* `--batch_size`: Number of images per batch (default 4).
+* `--keep_aspect`: Keep aspect ratio during resizing.
+
 
 ---
 
