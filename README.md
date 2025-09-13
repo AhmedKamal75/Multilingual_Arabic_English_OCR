@@ -5,6 +5,8 @@
 [![Kaggle Notebook 1](https://img.shields.io/badge/kaggle-notebook-blue)](https://www.kaggle.com/code/ahmedkamal75/multilingual-arabic-english-svtr-ocr-recongnizer)
 [![Kaggle Notebook 2](https://img.shields.io/badge/kaggle-notebook-blue)](https://www.kaggle.com/code/akamalkaggle117511/multilingual-arabic-english-svtr-ocr-recongnizer)
 [![Model (Kaggle)](https://img.shields.io/badge/model-kaggle-orange)](https://www.kaggle.com/models/ahmedkamal75/svtr_deformable_large_epoch_58)
+[![Dataset V1](https://img.shields.io/badge/dataset-kaggle-orange)](https://www.kaggle.com/datasets/ahmedkamal75/arabic-english-ocr-dataset)
+[![Dataset V2](https://img.shields.io/badge/dataset-kaggle-orange)](https://www.kaggle.com/datasets/ahmedkamal75/arabic-english-ocr-synthatic-dataset-v2)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 
 This project explores **Scene Text Recognition (STR)** using the **SVTR (Scene Visual Transformer)** architecture with **deformable attention** for multilingual OCR in **Arabic and English**.  
