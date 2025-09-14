@@ -150,7 +150,7 @@ python inference.py \
 * **Date**: Sep 10, 2025
 * **Runtime**: 19h 29m (sum of two runs)
 * **Dataset**: [Synthetic Dataset V2](https://www.kaggle.com/datasets/ahmedkamal75/arabic-english-ocr-synthatic-dataset-v2) (100k samples)
-* **Config**: Input (64×256×3), SMALL model, 40 epochs + continued training
+* **Config**: Input (64×256×3), SMALL model, 68 with early stopping
 
 **Best Model** → [Epoch 42](https://www.kaggle.com/models/ahmedkamal75/svtr_deformable_epoch_42_best)
 
