@@ -279,4 +279,4 @@ This project demonstrated how **dataset complexity**, **augmentation strength**,
 
 ## Licensing
 
-This project is licensed under the Apache License 2.0. See the file [LICENSE](LICENSE.txt) for details.
+This project is licensed under the MIT License. See the file [LICENSE](LICENSE.txt) for details.
