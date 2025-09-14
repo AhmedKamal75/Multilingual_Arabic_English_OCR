@@ -143,6 +143,10 @@ python inference.py \
 
 > ⚠️ **Observation**: Excellent results, but dataset was too easy → not realistic, high overfitting.
 
+![Loss](plots/first_attempt_loss.png)
+![Sequence_Accuracy](plots/first_attempt_sequence_acc.png)
+![CER](plots/first_attempt_CER.png)
+![Test_examples](examples/first_attempt_test_examples.png)
 ---
 
 ### 2. Second Attempt: Small Model + Harder Dataset
@@ -163,6 +167,10 @@ python inference.py \
 | WER                |            | 0.1915     |
 
 > ✅ More realistic, but lower performance. Demonstrated the need for a **larger model** and more samples.
+
+![Plots](plots/second%20attempt.PNG)
+![Test_examples](examples/second_attempt_test_examples.png)
+
 
 ---
 
@@ -188,6 +196,10 @@ python inference.py \
 | WER                |            | 0.1615     |
 
 > 🚀 **Observation**: Larger model + more samples significantly improved robustness. Achieved the lowest CER/WER across all attempts on the hard dataset.
+
+![Plots](plots/third%20attempt.PNG)
+![Test_examples](examples/third_attempt_test_examples.png)
+
 
 ---
 
