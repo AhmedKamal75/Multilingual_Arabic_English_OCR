@@ -492,7 +492,7 @@ def inference_single(model, image_path, text_processor, config, keep_aspect=True
 
 def inference_batch(model, image_paths, text_processor, config, keep_aspect=True, batch_size=8, method='greedy', beam_size=4):
     results = []
-    for i in range(0, len(image_paths), batch_size):
+    for i in tqdm(range(0, len(image_paths), batch_size), desc="Inference", unit="batch"):
         chunk = image_paths[i:i+batch_size]
         x = preprocess_batch(chunk, config, keep_aspect=keep_aspect)
         with torch.no_grad():
@@ -543,13 +543,13 @@ def main():
     # Save results
     out_txt = os.path.join(args.output_dir, "inference_results.txt")
     with open(out_txt, 'w', encoding='utf-8') as f:
-        for p, txt in zip(image_paths, results):
+        for p, txt in tqdm(zip(image_paths, results), total=len(image_paths), desc="Saving results"):
             f.write(f"{p}\t{txt}\n")
     print(f"[main] Results saved to {out_txt}")
 
     # optional visualizations
     if args.visualize:
-        for p, txt in zip(image_paths, results):
+        for p, txt in tqdm(zip(image_paths, results), total=len(image_paths), desc="Visualizing"):
             name = Path(p).stem
             out_img = os.path.join(args.output_dir, f"{name}_pred.png")
             visualize_and_save(p, txt, out_img)
@@ -614,28 +614,18 @@ def main():
 if __name__ == "__main__":
     main()
 
+# read_world dataset
+# python inference.py   --model_path models/Defo_SVTR_Large_2.4.pth   --image_path test_dataset_ocr/ar/   --output_dir results/ar --visualize --analyze --labels_file test_dataset_ocr/ar/ar_ground_truth.txt   --use_beam --beam_size 4 --batch_size 4
+# CER = 0.205
 
-# python inference.py   --model_path models/Defo_SVTR_Large_2.3.pth   --image_path test_dataset_ocr/ar/   --output_dir results/ar --visualize --analyze --labels_file test_dataset_ocr/ar/ar_ground_truth.txt   --use_beam --beam_size 20 --batch_size 4 --keep_aspect
+# synthatic dataset ar
+# python inference.py   --model_path models/Defo_SVTR_Large_2.4.pth   --image_path sample_ocr_dataset_v2/ar/   --output_dir sample_ocr_dataset_v2_results/ar/ --visualize --analyze --labels_file sample_ocr_dataset_v2/ar/labels.txt   --use_beam --beam_size 4 --batch_size 4
+# CER = 0.085
 
+# synthatic dataset en
+# python inference.py   --model_path models/Defo_SVTR_Large_2.4.pth   --image_path sample_ocr_dataset_v2/en/   --output_dir sample_ocr_dataset_v2_results/en/ --visualize --analyze --labels_file sample_ocr_dataset_v2/en/labels.txt   --use_beam --beam_size 4 --batch_size 4
+# CER = 0.035
 
-# python inference.py \
-#   --model_path models/Defo_SVTR_Large_1.0.pth \
-#   --image_path test_dataset_ocr/ar/ \
-#   --output_dir results/ar \
-#   --visualize \
-#   --keep_aspect \
-#   --batch_size 4
-
-# python inference.py \
-#   --model_path models/Defo_SVTR_Large_2.3.pth \
-#   --image_path test_dataset_ocr/ar/ \
-#   --output_dir results/ar \
-#   --use_beam --beam_size 4 \
-#   --keep_aspect --batch_size 2
-
-# python inference.py \
-#   --model_path models/Defo_SVTR_Large_2.3.pth \
-#   --image_path test_dataset_ocr/ar/ \
-#   --output_dir results/ar \
-#   --analyze --labels_file test_dataset_ocr/ar/ar_ground_truth.txt \
-#   --use_beam --beam_size 4 --batch_size 4 --keep_aspect
+# synthatic dataset mixed
+# python inference.py   --model_path models/Defo_SVTR_Large_2.4.pth   --image_path sample_ocr_dataset_v2/mixed/   --output_dir sample_ocr_dataset_v2_results/mixed/ --visualize --analyze --labels_file sample_ocr_dataset_v2/mixed/labels.txt   --use_beam --beam_size 4 --batch_size 4
+# CER = 0.181

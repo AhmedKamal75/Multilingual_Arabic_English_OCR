@@ -236,6 +236,20 @@ The following images are examples of correct and non-correct OCR predictions fro
 ![Non-Correct Examples](examples/not_currect_4.png)
 ![Non-Correct Examples](examples/not_currect_5.png)
 
+### Arabic Dates Dataset Evaluation
+
+To further test the model's capabilities on a specific and challenging real-world task, we performed inference on a subset of 1000 images from the [Arabic Dates OCR Dataset](https://www.kaggle.com/datasets/abdalrhmanmorsi/ocr-arabic-dates/data).
+
+The results highlighted a significant challenge in generalizing to this specific domain:
+
+*   **Model (Epoch 56)**: Achieved a **CER of 0.808**.
+*   **Model (Epoch 58)**: Achieved a **CER of 0.9401**.
+
+These high error rates indicate that while the model has learned general text features, it struggles with specialized, out-of-distribution data like formatted dates. This reinforces the need for domain-specific fine-tuning or including more diverse data types in the training set.
+
+---
+
+
 ## 📌 Key Learnings
 
 1. **Dataset matters more than model size**
